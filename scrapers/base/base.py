@@ -1,62 +1,48 @@
-import requests
-import re
-from requests_html import HTMLSession
-from selenium import webdriver
-from bs4 import BeautifulSoup
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from utils.requests.session import Session
 from abc import ABC, abstractmethod
-import time
+from models.sneaker import Sneaker
+from utils.driver import Driver
 
 
 class BaseScraper(ABC):
-    current_page = ''
     start_page_url = ''
     page_pattern_url = ''
     start_page_index = 0
-    number_of_pages = 0
 
-    def __init__(self):
-        self.session = Session()
-        self.driver = webdriver.Firefox()
-        self.current_page_url = self.start_page_url
+    def __init__(self, existing_sneakers):
+        self.driver = Driver()
+        self.sneakers = existing_sneakers
 
-    def get_page_source_driver(self, url):
-        page_source = ''
-        while page_source == '':
-            try:
-                self.driver.get(url)
-                page_source = self.driver.page_source
-                break
+    @abstractmethod
+    def get_number_of_pages(self):
+        pass
 
-            except:
-                print("Connection refused by the server..")
-                time.sleep(5)
-                continue
+    @abstractmethod
+    def get_all_page_item_containers(self, *args):
+        pass
 
-        return page_source
+    @abstractmethod
+    def get_sneaker_sizes(self, *args):
+        pass
 
-    def get_page_source_session(self, url):
-        page_source = ''
-        while page_source == '':
-            try:
-                page_source = self.session.get(url, headers=self.session.headers)
-                break
+    @abstractmethod
+    def get_sneaker_article(self, *args):
+        pass
 
-            except:
-                print("Connection refused by the server..")
-                time.sleep(5)
-                continue
+    @abstractmethod
+    def get_sneaker_name(self, *args):
+        pass
 
-        return page_source.text
+    @abstractmethod
+    def get_sneaker_url(self, *args):
+        pass
 
-    def get_page_soup(self, url):
-        page_source = self.get_page_source_driver(url)
-        soup = BeautifulSoup(page_source, 'html.parser')
+    @abstractmethod
+    def get_sneaker_price(self, *args):
+        pass
 
-        return soup
+    @abstractmethod
+    def get_sneaker_image_url(self, *args):
+        pass
 
     def get_brand_name_from_item_name(self, item_name):
         brands = ['jordan', 'nike', 'adidas', 'under armour', 'ua']
@@ -69,51 +55,59 @@ class BaseScraper(ABC):
 
         return 'Unknown'
 
-    @abstractmethod
-    def get_pages_urls(self, *args):
-        pages_number = self.get_number_of_pages()
-        all_pages = []
+    def get_all_urls(self):
+        all_urls = []
+        number_of_pages = self.get_number_of_pages()
+        last_page_index = number_of_pages + 1
 
-        for pages_number in range(self.start_page_index, pages_number + 1):
-            # for page_number in range(1, 1 + 1):
-            url_to_scrap = self.page_pattern_url + str(page_number)
-            # print(url_to_scrap)
-            page_sneakers = self.parse_catalog_items(url_to_scrap)
+        for page_number in range(self.start_page_index, last_page_index):
+            all_urls.append('{}{}'.format(self.page_pattern_url, page_number))
 
-        return all_pages
+        return all_urls
 
-    @abstractmethod
-    def get_number_of_pages(self):
-        pass
+    def get_sneakers_from_page(self, url):
+        item_containers = self.get_all_page_item_containers(url)
+        #sneakers = {}
 
-    @abstractmethod
-    def get_all_catalog_items(self, *args):
-        pass
+        for container in item_containers:
+            #sneaker = []
 
-    @abstractmethod
-    def get_sneaker_sizes(self, *args):
-        pass
+            sneaker_name = self.get_sneaker_name(container)
+            sneaker_price = self.get_sneaker_price(container)
+            sneaker_url = self.get_sneaker_url(container)
+            sneaker_article = self.get_sneaker_article(sneaker_url).lower()
+            sneaker_sizes = self.get_sneaker_sizes(container)
+            sneaker_brand = self.get_brand_name_from_item_name(sneaker_name)
+            sneaker_image_url = self.get_sneaker_image_url(container)
 
-    @abstractmethod
-    def get_article(self, *args):
-        pass
+            print(sneaker_name)
+            print(sneaker_price)
+            print(sneaker_brand)
+            print(sneaker_image_url)
 
-    @abstractmethod
-    def parse_catalog_items(self, *args):
-        pass
+            sneaker = Sneaker(name=sneaker_name,
+                              price=sneaker_price,
+                              url=sneaker_url,
+                              article=sneaker_article,
+                              sizes=sneaker_sizes,
+                              brand=sneaker_brand,
+                              image_url=sneaker_image_url)
 
-    def scrap(self):
-        pages_number = self.get_number_of_pages()
-        all_sneakers = []
+            try:
+                _ = self.sneakers[sneaker_article]
+                self.sneakers[sneaker_article].extend(sneaker)
+            except KeyError as e:
+                #print(e)
+                self.sneakers[sneaker_article] = [sneaker]
 
-        for page_url in range(self.start_page_index, pages_number + 1):
-            # for page_number in range(1, 1 + 1):
-            url_to_scrap = self.page_pattern_url + str(page_number)
-            # print(url_to_scrap)
-            page_sneakers = self.parse_catalog_items(url_to_scrap)
+            print(self.sneakers)
 
-            for sneaker in page_sneakers:
-                all_sneakers.append(sneaker)
+    def get_all_sneakers(self):
+        all_urls = self.get_all_urls()
+        print(all_urls)
 
-        return all_sneakers
+        for url in all_urls:
+            self.get_sneakers_from_page(url)
+
+        return self.sneakers
 

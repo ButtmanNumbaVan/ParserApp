@@ -109,7 +109,8 @@ class BasketPlanetScraper(BaseScraper):
         return sneakers
 
     def scrap(self):
-        pages_number = self.get_number_of_pages()
+        self.get_number_of_pages()
+        pages_number = self.number_of_pages
         all_sneakers = []
 
         for i in range(1, pages_number + 1):

@@ -1,55 +1,22 @@
 from selenium import webdriver
 from bs4 import BeautifulSoup
 from utils.requests.session import Session
+from scrapers.base.base import BaseScraper
+from models.sneaker import Sneaker
 import time
 import re
+
 import pickle
 import requests
 
 
-class Ataf:
-    def __init__(self):
-        self.session = Session()
-        self.start_page_url = 'https://www.ataf.pl/854-buty-do-koszykowki?&page=1'
-        self.page_pattern_url = 'https://www.ataf.pl/854-buty-do-koszykowki?&page='
-        self.start_page_index = 1
-        self.current_page_url = self.start_page_url
-        self.driver = webdriver.Firefox()
+class AtafScraper(BaseScraper):
+    start_page_url = 'https://www.ataf.pl/854-buty-do-koszykowki?&page=1'
+    page_pattern_url = 'https://www.ataf.pl/854-buty-do-koszykowki?&page='
+    start_page_index = 1
 
-    def get_page_source(self, url):
-        page_source = ''
-        while page_source == '':
-            try:
-                self.driver.get(url)
-                page_source = self.driver.page_source
-                break
-
-            except:
-                print("Connection refused by the server..")
-                time.sleep(5)
-                continue
-
-        return page_source
-
-    def get_page_source_fast(self, url):
-        page_source = ''
-        while page_source == '':
-            try:
-                page_source = self.session.get(url, headers = self.session.headers)
-                break
-
-            except:
-                print("Connection refused by the server..")
-                time.sleep(5)
-                continue
-
-        return page_source.text
-
-    def get_page_soup(self, url):
-        page_source = self.get_page_source(url)
-        soup = BeautifulSoup(page_source, 'html.parser')
-
-        return soup
+    def __init__(self, existing_sneakers):
+        super().__init__(existing_sneakers)
 
     def get_number_of_pages(self):
        #  soup = self.get_page_soup(self.start_page_url)
@@ -57,13 +24,13 @@ class Ataf:
        #  number_of_pages = int(soup.find(class_='pagination__input').find('span').text[-1])
        # # print(number_of_pages)
 
-        return 5
+        return 6
 
-    def get_all_catalog_items(self, url):
-        soup = self.get_page_soup(url)
-        catalog_items = soup.find(class_='pcajax row').find_all(class_='col-md-6 col-lg-4 no-pad')
+    def get_all_page_item_containers(self, url):
+        soup = self.driver.get_page_soup(url)
+        item_containers = soup.find(class_='pcajax row').find_all(class_='col-md-6 col-lg-4 no-pad')
 
-        return catalog_items
+        return item_containers
 
     def get_sneaker_sizes(self, item):
         sizes = []
@@ -74,71 +41,79 @@ class Ataf:
 
         return sizes
 
-    def get_article(self, item_url):
-        soup = BeautifulSoup(self.get_page_source_fast(item_url), 'html.parser')
+    def get_sneaker_article(self, item_url):
+        soup = BeautifulSoup(self.driver.get_page_source_session(item_url), 'html.parser')
         article = soup.find(string="Kod produktu:").find_next('td').contents[0]
 
-        return article
+        return article.lower()
 
-    def get_brand_name_from_item_name(self, item_name):
-        brands = ['jordan', 'nike', 'adidas', 'under armour', 'ua']
+    def get_sneaker_name(self, container):
+        return container.find(class_='slider-product').text
 
-        item_name = item_name.lower()
+    def get_sneaker_price(self, container):
+        return float(re.findall(r'\d+[,.]\d+', container.find(class_='slider-price').text.replace(',', '.'))[0])
 
-        for brand in brands:
-            if brand in item_name:
-                return brand
+    def get_sneaker_url(self, container):
+        return container.find('a')['href']
 
-        return 'Unknown'
+    def get_sneaker_image_url(self, container):
+        try:
+            sneaker_image_url = container.find('img')['src']
+        except:
+            sneaker_image_url = 'No image'
 
-    def parse_catalog_items(self, url):
-        catalog_items = self.get_all_catalog_items(url)
-        sneakers = []
+        return sneaker_image_url
 
-        for item in catalog_items:
-            sneaker = []
-
-            sneaker_name = item.find(class_='slider-product').text
-            sneaker_price = float(re.findall(r'\d+[,.]\d+', item.find(class_='slider-price').text.replace(',', '.'))[0])
-            sneaker_url = item.find('a')['href']
-            sneaker_article = self.get_article(sneaker_url).lower()
-            sneaker_sizes = self.get_sneaker_sizes(item)
-
-            sneaker_brand = self.get_brand_name_from_item_name(sneaker_name)
-
-            try:
-                sneaker_image_url = item.find('img')['src']
-            except:
-                sneaker_image_url = 'No image'
-
-            print(sneaker_name)
-            print(sneaker_price)
-            print(sneaker_brand)
-            print(sneaker_image_url)
-
-            sneaker.append(sneaker_name)
-            sneaker.append(sneaker_price)
-            sneaker.append(sneaker_article)
-            sneaker.append(sneaker_url)
-            sneaker.append(sneaker_brand)
-            sneaker.append(sneaker_image_url)
-            sneaker.append(sneaker_sizes)
-
-            sneakers.append(sneaker)
-
-        return sneakers
-
-    def scrap(self):
-        pages_number = self.get_number_of_pages()
-        all_sneakers = []
-
-        for page_number in range(1, pages_number+1):
-        #for page_number in range(1, 1 + 1):
-            url_to_scrap = self.page_pattern_url + str(page_number)
-            #print(url_to_scrap)
-            page_sneakers = self.parse_catalog_items(url_to_scrap)
-
-            for sneaker in page_sneakers:
-                all_sneakers.append(sneaker)
-
-        return all_sneakers
+    # def get_sneakers_from_page(self, url):
+    #     item_containers = self.get_all_page_item_containers(url)
+    #     #sneakers = {}
+    #
+    #     for container in item_containers:
+    #         #sneaker = []
+    #
+    #         sneaker_name = self.get_sneaker_name(container)
+    #         sneaker_price = self.get_sneaker_price(container)
+    #         sneaker_url = self.get_sneaker_url(container)
+    #         sneaker_article = self.get_sneaker_article(sneaker_url)
+    #         sneaker_sizes = self.get_sneaker_sizes(container)
+    #         sneaker_brand = self.get_brand_name_from_item_name(sneaker_name)
+    #         sneaker_image_url = self.get_sneaker_image_url(container)
+    #
+    #         print(sneaker_name)
+    #         print(sneaker_price)
+    #         print(sneaker_brand)
+    #         print(sneaker_image_url)
+    #
+    #         sneaker = Sneaker(name=sneaker_name,
+    #                           price=sneaker_price,
+    #                           url=sneaker_url,
+    #                           article=sneaker_article,
+    #                           sizes=sneaker_sizes,
+    #                           brand=sneaker_brand,
+    #                           image_url=sneaker_image_url)
+    #
+    #         # sneaker.append(sneaker_name)
+    #         # sneaker.append(sneaker_price)
+    #         # sneaker.append(sneaker_article)
+    #         # sneaker.append(sneaker_url)
+    #         # sneaker.append(sneaker_brand)
+    #         # sneaker.append(sneaker_image_url)
+    #         # sneaker.append(sneaker_sizes)
+    #
+    #         if self.sneakers[sneaker_article]:
+    #             self.sneakers[sneaker_article].extend(sneaker)
+    #         else:
+    #             self.sneakers[sneaker_article] = [sneaker]
+    #
+    #     #return sneakers
+    #
+    # def get_all_sneakers(self):
+    #     all_urls = self.get_all_urls()
+    #
+    #     for url in all_urls:
+    #     #for page_number in range(1, 1 + 1):
+    #         #url_to_scrap = self.page_pattern_url + str(page_number)
+    #         #print(url_to_scrap)
+    #         self.get_sneakers_from_page(url)
+    #
+    #    # return all_sneakers
