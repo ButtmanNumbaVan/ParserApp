@@ -40,8 +40,8 @@ class SklepKoszykarzaScraper(BaseScraper):
 
         return sizes
 
-    def get_sneaker_article(self, item):
-        return item.find(class_='s').find('span').text.lower()
+    def get_sneaker_article(self, container):
+        return container.find(class_='s').find('span').text.lower()
 
     def get_sneaker_name(self, container):
         return container.find(class_='n').text.replace('\n', "")

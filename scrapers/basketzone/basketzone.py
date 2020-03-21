@@ -4,6 +4,7 @@ from requests_html import HTMLSession
 from selenium import webdriver
 from bs4 import BeautifulSoup
 from scrapers.base.base import BaseScraper
+from utils.decorators import error_catcher
 from utils.requests.session import Session
 import time
 
@@ -31,6 +32,7 @@ class BasketZoneScraper(BaseScraper):
        # print(len(catalog_items))
         return catalog_items
 
+    @error_catcher
     def get_sneaker_sizes(self, item):
         sizes = []
         sizes_from_container = item.find(class_='sizes-boxes').find_all('div')[-1].find_all('a')
@@ -41,27 +43,31 @@ class BasketZoneScraper(BaseScraper):
 
         return sizes
 
-    def get_sneaker_article(self, item_url):
+    @error_catcher
+    def get_sneaker_article(self, container):
+        item_url = self.get_sneaker_url(container)
+
         soup = BeautifulSoup(self.driver.get_page_source_session(item_url), 'html.parser')
         article = soup.find(class_='product-page-indeks').text.replace(" ", "").replace("\n", "")
 
         return article.lower()
 
+    @error_catcher
     def get_sneaker_name(self, container):
         return container.find(class_='name').text.replace("\n", "")
 
+    @error_catcher
     def get_sneaker_price(self, container):
         return float(re.findall(r'\d+[,.]\d+', container.find(class_='prices clearfix').find_all('span')[-2].
                                 text.replace(',', '.'))[0])
 
+    @error_catcher
     def get_sneaker_url(self, container):
         return container.find('a')['href']
 
+    @error_catcher
     def get_sneaker_image_url(self, container):
-        try:
-            sneaker_image_url = container.find('img')['src']
-        except:
-            sneaker_image_url = 'No image'
+        sneaker_image_url = container.find('img')['src']
 
         return sneaker_image_url
 

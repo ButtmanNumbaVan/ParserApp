@@ -8,122 +8,75 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from utils.requests.session import Session
 from scrapers.base.base import BaseScraper
+from utils.decorators import error_catcher
 import time
 
 
 #TODO:all scrapers should be abstarct based
 class BasketPlanetScraper(BaseScraper):
-    start_page_url = 'https://basketplanet.pl/pl/3-obuwie-meskie#/page-1'
-    page_pattern_url = 'https://basketplanet.pl/pl/3-obuwie-meskie#/page-'
+    start_page_url = 'https://basketplanet.pl/pl/obuwie-meskie/'
+    page_pattern_url = 'https://basketplanet.pl/pl/obuwie-meskie/?page='
     start_page_index = 1
-    number_of_pages = 0
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, existing_sneakers):
+        super().__init__(existing_sneakers)
 
     def get_number_of_pages(self):
-        soup = self.get_page_soup(self.start_page_url)
+        soup = self.driver.get_page_soup(self.start_page_url)
         # print(soup)
+        pages_number = int(soup.find(class_='page-list pagination justify-content-center justify-content-md-end'
+                                            ' mt-3 mt-md-0').find_all('li')[-2].find('a').text)
 
-        self.number_of_pages = int(soup.find(class_='pagination').find_all('li')[-2].find('span').text)
-        # print(number_of_pages)
+        return pages_number
 
-    def get_all_catalog_items(self, url):
-        soup = self.get_page_soup(url)
+    def get_all_page_item_containers(self, url):
+        soup = self.driver.get_page_soup(url)
         # print(soup)
-        catalog_items = soup.find_all(
-            class_=re.compile('^ajax_block_product'))  # .find_all(class_=' thumbnails product-container')
+        catalog_items = soup.find_all(class_='card card-product')
         # print(catalog_items)
         # print(len(catalog_items))
         # print('scrapping')
-        return catalog_items[1:]
+        return catalog_items
 
-    def get_article(self, item_url):
-        soup = BeautifulSoup(self.get_page_source_session(item_url), 'html.parser')
-        article = soup.find(class_='text-left small').text.split(' ')[-1]
-
+    @error_catcher
+    def get_sneaker_article(self, container):
+        article = container.find('img')['alt'].split(' ')[-1]
+        print(article)
         return article
 
-    def get_sneaker_sizes(self, item_url):
-        soup = BeautifulSoup(self.get_page_source_session(item_url), 'html.parser')
-
-        # print(soup)
-        # print("#########################")
-        # print(article)
-
+    @error_catcher
+    def get_sneaker_sizes(self, container):
         sizes = []
-        sizes_from_container = soup.find(class_='form-control attribute_select no-print').find_all('option')
+        sizes_from_container = container.find(class_='sizeguide-avaiable-sizes').find_all('span')
         # print(sizes_from_container)
 
         for size in sizes_from_container:
-            # print(size['class'])
-            # if 'disabled' not in size['class']:
-            sizes.append(size.text)
+            try:
+                _ = size['class']
+            except:
+                sizes.append(size.text)
 
-        # time.sleep(0.5)
+        print(sizes)
 
         return sizes
 
-    def parse_catalog_items(self, url):
-        catalog_items = self.get_all_catalog_items(url)
-        sneakers = []
+    @error_catcher
+    def get_sneaker_name(self, container):
+        return container.find(class_='h3 product-title').find('a').text
 
-        for item in catalog_items:
-            sneaker = []
+    @error_catcher
+    def get_sneaker_price(self, container):
+        #print(round(float(re.findall(r'\d+', container.find(itemprop='price').text)[0])/100))
+        return round(float(re.findall(r'\d+', container.find(itemprop='price').text)[0])/100)
 
-            sneaker_name = item.find(class_='caption').find(class_='text-center').find('span').text
-            sneaker_price = float(
-                re.findall(r'\d+[,.]\d+', item.find(class_='price text-center').find('span').text.replace(',', '.'))[0])
-            sneaker_url = item.find('a')['href']
-            try:
-                sneaker_article, sneaker_sizes = self.get_sneaker_sizes(sneaker_url)
-            except:
-                continue
-            sneaker_article = sneaker_article.lower()
+    @error_catcher
+    def get_sneaker_url(self, container):
+        return container.find('a')['href']
 
-            try:
-                sneaker_brand = item.find(class_='caption').find('img')['alt']
-            except:
-                sneaker_brand = 'Unknown'
+    @error_catcher
+    def get_sneaker_image_url(self, container):
+        return container.find('img')['src']
 
-            try:
-                sneaker_image_url = item.find('img')['src']
-            except:
-                sneaker_image_url = 'No image'
-
-            print(sneaker_name)
-            print(sneaker_price)
-            print(sneaker_brand)
-            print(sneaker_image_url)
-
-            sneaker.append(sneaker_name)
-            sneaker.append(sneaker_price)
-            sneaker.append(sneaker_article)
-            sneaker.append(sneaker_url)
-            sneaker.append(sneaker_brand)
-            sneaker.append(sneaker_image_url)
-            sneaker.append(sneaker_sizes)
-
-            sneakers.append(sneaker)
-
-        return sneakers
-
-    def scrap(self):
-        self.get_number_of_pages()
-        pages_number = self.number_of_pages
-        all_sneakers = []
-
-        for i in range(1, pages_number + 1):
-            # for i in range(1, 1 + 1):
-            print(i)
-            url_to_scrap = self.page_pattern_url + str(i)
-            page_sneakers = self.parse_catalog_items(url_to_scrap)
-
-            for sneaker in page_sneakers:
-                all_sneakers.append(sneaker)
-
-        # print(len(all_sneakers))
-        return all_sneakers
 
 # class BasketPlanet:
 #     def __init__(self):

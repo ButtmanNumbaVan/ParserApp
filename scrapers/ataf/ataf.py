@@ -4,6 +4,7 @@ from utils.requests.session import Session
 from scrapers.base.base import BaseScraper
 from models.sneaker import Sneaker
 import time
+from utils.decorators import error_catcher
 import re
 
 import pickle
@@ -32,6 +33,7 @@ class AtafScraper(BaseScraper):
 
         return item_containers
 
+    @error_catcher
     def get_sneaker_sizes(self, item):
         sizes = []
         sizes_from_container = item.find_all('span')
@@ -41,28 +43,30 @@ class AtafScraper(BaseScraper):
 
         return sizes
 
-    def get_sneaker_article(self, item_url):
+    @error_catcher
+    def get_sneaker_article(self, container):
+        item_url = self.get_sneaker_url(container)
+
         soup = BeautifulSoup(self.driver.get_page_source_session(item_url), 'html.parser')
         article = soup.find(string="Kod produktu:").find_next('td').contents[0]
 
         return article.lower()
 
+    @error_catcher
     def get_sneaker_name(self, container):
         return container.find(class_='slider-product').text
 
+    @error_catcher
     def get_sneaker_price(self, container):
         return float(re.findall(r'\d+[,.]\d+', container.find(class_='slider-price').text.replace(',', '.'))[0])
 
+    @error_catcher
     def get_sneaker_url(self, container):
         return container.find('a')['href']
 
+    @error_catcher
     def get_sneaker_image_url(self, container):
-        try:
-            sneaker_image_url = container.find('img')['src']
-        except:
-            sneaker_image_url = 'No image'
-
-        return sneaker_image_url
+        return container.find('img')['src']
 
     # def get_sneakers_from_page(self, url):
     #     item_containers = self.get_all_page_item_containers(url)

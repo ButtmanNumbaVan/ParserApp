@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from models.sneaker import Sneaker
 from utils.driver import Driver
+from utils.decorators import error_catcher
 
 
 class BaseScraper(ABC):
@@ -75,8 +76,12 @@ class BaseScraper(ABC):
             sneaker_name = self.get_sneaker_name(container)
             sneaker_price = self.get_sneaker_price(container)
             sneaker_url = self.get_sneaker_url(container)
-            sneaker_article = self.get_sneaker_article(sneaker_url).lower()
+            sneaker_article = self.get_sneaker_article(container).lower()
+
             sneaker_sizes = self.get_sneaker_sizes(container)
+            if sneaker_sizes == 'Unknown':
+                continue
+
             sneaker_brand = self.get_brand_name_from_item_name(sneaker_name)
             sneaker_image_url = self.get_sneaker_image_url(container)
 
@@ -84,6 +89,7 @@ class BaseScraper(ABC):
             print(sneaker_price)
             print(sneaker_brand)
             print(sneaker_image_url)
+            print(sneaker_article)
 
             sneaker = Sneaker(name=sneaker_name,
                               price=sneaker_price,
@@ -95,7 +101,7 @@ class BaseScraper(ABC):
 
             try:
                 _ = self.sneakers[sneaker_article]
-                self.sneakers[sneaker_article].extend(sneaker)
+                self.sneakers[sneaker_article].append(sneaker)
             except KeyError as e:
                 #print(e)
                 self.sneakers[sneaker_article] = [sneaker]
